@@ -1,0 +1,97 @@
+name: Tag Release → Play Store
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    # ─────── APP SPECIFIC CONFIG (ONLY EDIT THIS) ───────
+    env:
+      PACKAGE_NAME: com.example.test_app     # 👈 CHANGE PER APP
+      VERSION_CODE_OFFSET: 1                # 👈 YOUR CURRENT PLAY VERSION
+      PLAY_TRACK: alpha                    # internal | alpha ( closed testing) | beta (open testing) | production
+    # ───────────────────────────────────────────────────
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version-file: pubspec.yaml
+          cache: true
+
+
+      # ───── KEYSTORE ─────
+      - name: Decode upload keystore
+        run: |
+          echo "${{ secrets.UPLOAD_KEYSTORE_BASE64 }}" | base64 --decode > android/app/upload-keystore.jks
+
+      # - name: Create key.properties
+      #   run: |
+      #     echo "storeFile=upload-keystore.jks" > android/key.properties
+      #     echo "storePassword=${{ secrets.KEYSTORE_PASSWORD }}" >> android/key.properties
+      #     echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> android/key.properties
+      #     echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> android/key.properties
+
+      - name: Create key.properties (shell-safe)
+        run: |
+          cat << 'EOF' > android/key.properties
+          storeFile=upload-keystore.jks
+          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          EOF
+
+
+      # ───── VERSION HANDLING ─────
+      - name: Set version from tag with offset
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          VERSION_CODE=$((${{ github.run_number }} + $VERSION_CODE_OFFSET))
+          sed -i "s/^version:.*/version: $VERSION+$VERSION_CODE/" pubspec.yaml
+
+      - run: flutter pub get
+      - run: flutter build appbundle --release
+
+      # ───── UPLOAD TO PLAY STORE ─────
+      - name: Upload to Play Store
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_JSON_KEY }}
+          packageName: ${{ env.PACKAGE_NAME }}
+          releaseFiles: build/app/outputs/bundle/release/app-release.aab
+          track: ${{ env.PLAY_TRACK }}
+          status: completed
+
+      # ───── ONLY MAJOR/MINOR → GITHUB RELEASE ─────
+      - name: Check major/minor
+        id: check
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.0$ ]]; then
+            echo "major_minor=true" >> $GITHUB_OUTPUT
+          else
+            echo "major_minor=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Release (AAB only)
+        if: steps.check.outputs.major_minor == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: build/app/outputs/bundle/release/app-release.aab
+          name: ${{ github.ref_name }}
+          body: |
+            Android AAB Release  
+            Package: ${{ env.PACKAGE_NAME }}
+            Version: ${{ github.ref_name }}
+            Track: ${{ env.PLAY_TRACK }}

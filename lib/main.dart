@@ -18,8 +18,21 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Flutter Demo',
       theme: ThemeData(
-        primarySwatch: Colors.blue,
+        primarySwatch: Colors.orange,
+        useMaterial3: true,
+        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+          backgroundColor: Colors.grey,
+          selectedItemColor: Colors.deepOrange,
+          unselectedItemColor: Colors.white,
+        ),
+        bottomAppBarTheme: const BottomAppBarThemeData(
+          color: Colors.deepOrange,
+        ),
       ),
+      darkTheme: ThemeData.dark(
+        useMaterial3: true,
+      ),
+      themeMode: ThemeMode.light,
       home: const MyHomePage(),
     );
   }
@@ -40,12 +53,14 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   initState() {
     super.initState();
-     _pages = [
-  const Page1(),
-  Page2(onTabControllerCreated: (controller) => _page2TabController = controller),
-  const Page3(),
-  const Page4(),
-  ];
+    _pages = [
+      const Page1(),
+      Page2(
+          onTabControllerCreated: (controller) =>
+              _page2TabController = controller),
+      const Page3(),
+      const Page4(),
+    ];
   }
 
   @override
@@ -114,6 +129,9 @@ class _MyHomePageState extends State<MyHomePage> {
           children: _pages,
         ),
         bottomNavigationBar: BottomNavigationBar(
+          backgroundColor: Colors.grey,
+          selectedItemColor: Colors.deepOrange,
+          unselectedItemColor: Colors.blueGrey,
           currentIndex: _currentIndex,
           onTap: (index) {
             setState(() {
