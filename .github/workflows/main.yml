@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write        
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -31,28 +34,7 @@ jobs:
           cache: true
 
 
-      # ───── KEYSTORE ─────
-      - name: Decode upload keystore
-        run: |
-          echo "${{ secrets.UPLOAD_KEYSTORE_BASE64 }}" | base64 --decode > android/app/upload-keystore.jks
-
-      # - name: Create key.properties
-      #   run: |
-      #     echo "storeFile=upload-keystore.jks" > android/key.properties
-      #     echo "storePassword=${{ secrets.KEYSTORE_PASSWORD }}" >> android/key.properties
-      #     echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> android/key.properties
-      #     echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> android/key.properties
-
-      - name: Create key.properties (shell-safe)
-        run: |
-          cat << 'EOF' > android/key.properties
-          storeFile=upload-keystore.jks
-          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
-          keyPassword=${{ secrets.KEY_PASSWORD }}
-          keyAlias=${{ secrets.KEY_ALIAS }}
-          EOF
-
-
+  
       # ───── VERSION HANDLING ─────
       - name: Set version from tag with offset
         run: |
@@ -62,16 +44,6 @@ jobs:
 
       - run: flutter pub get
       - run: flutter build appbundle --release
-
-      # ───── UPLOAD TO PLAY STORE ─────
-      - name: Upload to Play Store
-        uses: r0adkll/upload-google-play@v1
-        with:
-          serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_JSON_KEY }}
-          packageName: ${{ env.PACKAGE_NAME }}
-          releaseFiles: build/app/outputs/bundle/release/app-release.aab
-          track: ${{ env.PLAY_TRACK }}
-          status: completed
 
       # ───── ONLY MAJOR/MINOR → GITHUB RELEASE ─────
       - name: Check major/minor
@@ -84,9 +56,22 @@ jobs:
             echo "major_minor=false" >> $GITHUB_OUTPUT
           fi
 
+      # - name: Create GitHub Release (AAB only)
+      #   if: steps.check.outputs.major_minor == 'true'
+      #   uses: softprops/action-gh-release@v1
+      #   with:
+      #     files: build/app/outputs/bundle/release/app-release.aab
+      #     name: ${{ github.ref_name }}
+      #     body: |
+      #       Android AAB Release  
+      #       Package: ${{ env.PACKAGE_NAME }}
+      #       Version: ${{ github.ref_name }}
+      #       Track: ${{ env.PLAY_TRACK }}
+
+
       - name: Create GitHub Release (AAB only)
         if: steps.check.outputs.major_minor == 'true'
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: build/app/outputs/bundle/release/app-release.aab
           name: ${{ github.ref_name }}
